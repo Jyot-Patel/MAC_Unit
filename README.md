@@ -9,11 +9,7 @@
 ![DRC%2FLVS](https://img.shields.io/badge/DRC%20%C2%B7%20LVS%20%C2%B7%20antenna-0%20violations-2f855a)
 ![Die](https://img.shields.io/badge/die-144.16%C2%B7144.16%20%C2%B5m%20square-6b46c1)
 
-A single multiply-accumulate processing element for a systolic-array MAC,
-hardened as a **square, tileable compute block**. The RTL is untouched:
-`PIPELINE_MAC=1` is delivered as a Yosys parameter, producing the pipeline
-`[hop regs] | [mult] | [add] | [acc]` (the product lands one clock after its
-operands are registered).
+This project implements a multiply-accumulate (MAC) processing element for a systolic array. The block is designed to be square and tileable, making it suitable for connecting multiple processing elements in an array. With `PIPELINE_MAC=1` passed as a Yosys parameter, the pipeline follows the structure `[hop regs] | [mult] | [add] | [acc]`. The multiplier produces its result one clock cycle after the operands are registered.
 
 <p align="center">
   <img src="librelane_flow_pd/docs/images/mac_pe_klayout_render.png" alt="KLayout signoff render of the final mac_pe layout" width="480">
@@ -23,11 +19,9 @@ operands are registered).
 
 | OpenROAD view of the final ODB | Detail (30 × 30 µm, stdcells + met1/met2 + clock tree) |
 |---|---|
-| <img src="librelane_flow_pd/docs/images/mac_pe_openroad_full.png" alt="OpenROAD render of the final mac_pe ODB database"> | <img src="librelane_flow_pd/docs/images/mac_pe_openroad_detail.png" alt="OpenROAD zoomed render of placement and routing"> |
+| <img src="librelane_flow_pd/docs/images/mac_pe_openroad_full.png" alt="OpenROAD render of the final mac_pe ODB"> | <img src="librelane_flow_pd/docs/images/mac_pe_openroad_detail.png" alt="OpenROAD zoomed render of placement and routing"> |
 
-*Both OpenROAD images were rendered directly from the delivered database
-(`final/odb/mac_pe.odb`) with `save_image` — the exact silicon state committed
-in this repo.*
+*Both OpenROAD images were generated with `save_image` from the final database, `final/odb/mac_pe.odb`. They show the same database included in this repository.*
 
 ## Final results — run `sq1s740`
 
@@ -41,15 +35,11 @@ in this repo.*
 | Physical verification | magic DRC 0 · KLayout DRC 0 · XOR 0 · antenna 0 · LVS *"Circuits match uniquely"* · detailed-route DRC 0 · flow errors 0 |
 | Max fmax corners | SS 135.9 MHz · TT 258–264 MHz · FF 403–412 MHz |
 
-Deliverables of the run are committed under
-[`librelane_flow_pd/runs/sq1s740/final/`](librelane_flow_pd/runs/sq1s740/final/)
-— `odb/`, `def/`, `gds/`, `lef/`, `mag/`, `sdc/`, `sdf/`, `spef/`, `lib/`,
-`spice/`, `metrics.json`.
+The final run artifacts are available in [`librelane_flow_pd/runs/sq1s740/final/`](librelane_flow_pd/runs/sq1s740/final/). The directory contains the ODB, DEF, GDS, LEF, MAG, SDC, SDF, SPEF, Liberty, and SPICE outputs, along with `metrics.json`.
 
 ## Floorplan contract
 
-A systolic-array tile: **operands in on West + North, results out on East +
-South**, so neighboring tiles abut with straight wires.
+The block is laid out for use in a systolic array. Operand inputs enter from the west and north, while results leave through the east and south. This arrangement lets adjacent tiles connect with straight wires.
 
 | Side | Pins | Contents |
 |---|---|---|
@@ -68,7 +58,7 @@ South**, so neighboring tiles abut with straight wires.
 | Area pass `FP_CORE_UTIL 41 / PL_TARGET_DENSITY_PCT 50` | die **−24.5 %** *and* 0.24 ns faster (shorter wires beat density penalty) |
 | Square freeze `DIE_AREA 144.16²` | row-aligned square die + square core, another −8.3 % die → final claim **7.40 ns** |
 
-Full decision log with run-by-run receipts: [`03_RESULTS.md`](librelane_flow_pd/docs/03_RESULTS.md).
+The complete run-by-run measurements and design decisions are documented in [`03_RESULTS.md`](librelane_flow_pd/docs/03_RESULTS.md).
 
 ## Repository layout
 
@@ -82,14 +72,13 @@ Full decision log with run-by-run receipts: [`03_RESULTS.md`](librelane_flow_pd/
 │   ├── rtl/                   # mac_pe.v, mult8x8_array.v (unmodified RTL)
 │   ├── scripts/sweep_period.sh# period-sweep helper (edits all 3 period places)
 │   ├── docs/                  # plan, floorplan guide, runbook, results
-│   └── runs/sq1s740/          # FINAL run: all 76 step receipts + final/
+│   └── runs/sq1s740/           # FINAL run: all 76 step receipts + final/
 └── README.md
 ```
 
 ## Reproducing the flow
 
-The flow runs inside a nix devshell (LibreLane 3.0.16 + OpenROAD, PDK
-resolved locally via ciel):
+The flow runs in a Nix devshell with LibreLane 3.0.16 and OpenROAD. The PDK is set up locally through Ciel. To reproduce the final run:
 
 ```bash
 cd <difetto-flake-dir> && nix develop
@@ -98,8 +87,7 @@ python3 -m librelane designs/mac/librelane_flow_pd/config.yaml \
     --run-tag sq1s740 --flow Classic
 ```
 
-See [`02_RUNBOOK.md`](librelane_flow_pd/docs/02_RUNBOOK.md) for the environment
-rules, the period-change checklist (3 places), and known-benign warnings.
+The [`02_RUNBOOK.md`](librelane_flow_pd/docs/02_RUNBOOK.md) covers the environment setup, the three locations that need updating when changing the clock period, and warnings that can safely be ignored.
 
 ## Documentation
 
@@ -112,9 +100,6 @@ rules, the period-change checklist (3 places), and known-benign warnings.
 
 ## Notes
 
-* Only the final run (`sq1s740`) is published; intermediate runs and
-  sibling projects are git-ignored. The period-optimal non-square variant
-  (`a41s735`, 7.35 ns / 136.05 MHz) is documented in `03_RESULTS.md`.
-* Images in `librelane_flow_pd/docs/images/` are regenerated from the
-  committed ODB via OpenROAD:
+* Only the final run (`sq1s740`) is published; intermediate runs and sibling projects are git-ignored. The period-optimal non-square variant (`a41s735`, 7.35 ns / 136.05 MHz) is documented in `03_RESULTS.md`.
+* Images in `librelane_flow_pd/docs/images/` are regenerated from the committed ODB via OpenROAD:
   `save_image -area {0 0 144.16 144.16} -width 2400 <out>.png`.
