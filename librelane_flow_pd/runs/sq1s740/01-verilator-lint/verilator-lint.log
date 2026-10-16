@@ -1,0 +1,13 @@
+%Warning-UNUSEDSIGNAL: /home/jyot/workspace/librelane_project/designs/mac/librelane_flow_pd/rtl/mult8x8_array.v:39:24: Signal is not used: 'clk'
+                                                                                                                     : ... note: In instance 'mac_pe.g_struct_mult.u_mult'
+   39 |     input  wire        clk,    
+      |                        ^~~
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.044
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
+%Warning-UNUSEDSIGNAL: /home/jyot/workspace/librelane_project/designs/mac/librelane_flow_pd/rtl/mult8x8_array.v:40:24: Signal is not used: 'clr'
+                                                                                                                     : ... note: In instance 'mac_pe.g_struct_mult.u_mult'
+   40 |     input  wire        clr,    
+      |                        ^~~
+- V e r i l a t i o n   R e p o r t: Verilator 5.044 2026-01-01 rev v5.040
+- Verilator: Built from 0.620 MB sources in 449 modules, into 0.069 MB in 3 C++ files needing 0.000 MB
+- Verilator: Walltime 0.148 s (elab=0.033, cvt=0.023, bld=0.000); cpu 0.124 s on 1 threads; alloced 28.258 MB

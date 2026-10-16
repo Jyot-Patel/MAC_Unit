@@ -1,0 +1,1 @@
+openroad -exit -no_splash -metrics /home/jyot/workspace/librelane_project/designs/mac/librelane_flow_pd/runs/sq1s740/44-openroad-detailedrouting/or_metrics_out.json /nix/store/j3zasxqsakwcj8zapgx36i9g57cn0nc1-python3-3.13.9-env/lib/python3.13/site-packages/librelane/scripts/openroad/drt.tcl

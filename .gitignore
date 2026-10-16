@@ -1,0 +1,26 @@
+# =============================================================
+# mac_pe — LibreLane/sky130 physical-design repo
+#
+# Published content: librelane_flow_pd/ — RTL, config, SDCs,
+# scripts, docs, and the FINAL signoff-clean run only (sq1s740,
+# including its ODB/GDS/DEF deliverables).
+# =============================================================
+
+# Local-only sibling projects (kept out of this repo)
+RISCV_Efficient/
+script_pd/
+
+# LibreLane runs: keep ONLY the final signoff-clean run
+librelane_flow_pd/runs/*
+!librelane_flow_pd/runs/sq1s740/
+librelane_flow_pd/runs/sq1s740/tmp/
+
+# Interview-prep material stays local
+librelane_flow_pd/docs/10_PD_INTERVIEW_QA.md
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.tmp

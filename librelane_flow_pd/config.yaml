@@ -1,0 +1,169 @@
+# LibreLane Classic flow config for mac_pe -- the systolic unit cell, hardened
+# standalone as a SQUARE compute core so it can be abutted into an array:
+#   left/top = inputs, right/bottom = outputs (docs/01_FLOORPLAN_GUIDE.md).
+#
+# Brief constraints (docs/00_PLAN.md):
+#   * NO RTL CHANGES. PIPELINE_MAC=1 reaches Yosys as a chparam
+#     (SYNTH_PARAMETERS below) -- rtl/mac_pe.v and rtl/mult8x8_array.v are
+#     never edited; the multiplier is the project's own structural file
+#     (byte-identical copy from designs/matrix_multiplication/rtl/).
+#   * Goals, in order: LEAST CLK PERIOD, then AREA, then POWER. The period is
+#     evidence-driven: a synth-only sweep picks it (docs/02_RUNBOOK.md) and
+#     signoff STA judges the full PnR. Area/power are SIGNOFF OUTPUTS read
+#     from the run's reports, never typed in here as hopes.
+#   * Provenance: knobs marked (ref) are taken from
+#     designs/RISCV_Efficient/config.yaml -- same nix flake, same LibreLane
+#     3.0.16, same machine; its runs/v2 is the only PnR-proven config here
+#     (DRT closed at 0 violations). Knobs marked (mtx) come from
+#     designs/matrix_multiplication/config.yaml -- the parent 4x4 design.
+
+DESIGN_NAME: mac_pe
+
+PDK: sky130A
+STD_CELL_LIBRARY: sky130_fd_sc_hd
+
+# Structural PE: the array multiplier must elaborate at DATA_W==8, and
+# mac_pe.v instantiates it by name -- both files, nothing else.
+VERILOG_FILES:
+  - dir::rtl/mult8x8_array.v
+  - dir::rtl/mac_pe.v
+
+# PIPELINE_MAC=1 = the mandated build: [hop regs] | [mult] | [add] | [acc],
+# i.e. the multiplier and the 18-bit add each get their own cycle. This is a
+# build-parameter, not an RTL edit: Yosys applies it as `chparam -set
+# PIPELINE_MAC 1 mac_pe` (librelane/scripts/pyosys/ys_common.py:126).
+SYNTH_PARAMETERS:
+  - PIPELINE_MAC=1
+
+CLOCK_PORT: clk
+# START value for the synth-only sweep (docs/02_RUNBOOK.md section 1). It is
+# NOTE (measured, docs/03_RESULTS.md 1): CLOCK_PERIOD is fed to ABC's script
+#    construction (D = period*1000 ps) but the produced netlists are BIT-
+#    IDENTICAL across periods (s10 == s02 == ...) in this build -- so the knob
+#    only steers PnR repair/STA, never synthesis mapping. Do not sweep it at
+#    synth (decision log "Phase-1 methodology corrected").
+# PERIOD CHANGE CHECKLIST: this value AND the create_clock period in
+#    impl.sdc AND signoff.sdc must be edited together (3 places).
+# !! DELIBERATE ASYMMETRY (docs/03_RESULTS.md §4.3, decision log 2026-10-16) !!
+#   config CLOCK_PERIOD = 6.0   -> drives PnR repair/optimization (OVER-constrained:
+#                                  this is where the design achieved SS req 7.5215)
+#   impl.sdc             = 6.0   -> PnR STA (consistent with repair)
+#   signoff.sdc          = 7.35  -> what signoff STA REPORTS (the real claim)
+# The 3-place rule becomes: PNR_SDC <= SIGNOFF_SDC, deliberately documented.
+# Rationale: repair_timing only up-sizes what it sees as a violation, so a tight
+# repair target buys real SS speed (measured req 7.5215 @6.0 vs 7.9587 @7.75).
+# sq1p55 (rejected): tightening PnR repair 6.0 -> 5.5 on sq1 geometry inserted
+# 155 upsizes + 75 buffers yet made SS WORSE (req 7.3567 -> 7.3653) -- repair
+# pressure is exhausted on this geometry too (plateau, 4.1). PnR back to 6.0.
+# sq1cts / sq1cts2 (both closed): balance the clock tree across TT+SS. sq1cts
+# was a no-op (duplicate CTS_CORNERS key, last-wins); sq1cts2 applied the knob
+# (resolved.json + log prove it) yet netlist/WS stayed BYTE-IDENTICAL -> the
+# clock tree is not the SS bottleneck here (hold >= +0.23, 15-buffer tree).
+# sq1s740 (THIS config, final square run): only the signoff claim changes
+# 7.35 -> 7.40 (sq1 req 7.3567 + 0.0433); PnR stays 6.0.
+CLOCK_PERIOD: 6.0 # ns
+
+PNR_SDC_FILE: dir::impl.sdc
+SIGNOFF_SDC_FILE: dir::signoff.sdc
+
+# NOTE: CTS_CORNERS is defined ONCE, down in the CTS section -- a duplicate
+# YAML key here silently overrode nothing (last-key-wins) and sq1cts ran TT-only
+# (verified: resolved.json CTT list + byte-identical netlist/ODB vs sq1).
+
+# Systolic pin sides (docs/01_FLOORPLAN_GUIDE.md): NORTH/WEST = inputs,
+# SOUTH/EAST = outputs. Replaces the stock ioplacer, which would scatter
+# ports by arrival order. `both` = a design port missing from the cfg, or a
+# cfg line matching no port, is an error instead of a silent random side.
+IO_PIN_ORDER_CFG: dir::pin_order.cfg
+ERRORS_ON_UNMATCHED_IO: both
+
+# -- Interface model: make ABC and STA see the SAME drivers/loads. --
+# The SDCs below drive inputs with buf_1 and load outputs with 0.010 pF = 10 fF
+# (sky130 liberty: capacitive_load_unit pf). Synthesis has its own PDK
+# defaults (inv_2 / 33.442 fF) that would otherwise model a different chip:
+#   SYNTH_DRIVING_CELL {cell}/{port}  -- flow.py: "used in synthesis AND STA"
+#   OUTPUT_CAP_LOAD in fF -- flow.py units="fF" -> 10 == SDC set_load 0.010 pF
+SYNTH_DRIVING_CELL: sky130_fd_sc_hd__buf_1/X
+OUTPUT_CAP_LOAD: 10
+
+# -- Floorplan: SQUARE core (the whole point of the exercise, (mtx)) --
+# Relative sizing for bring-up: measure the synthesized cell area first, then
+# freeze a square absolute DIE_AREA for array abutment (floorplan guide
+# section "Fixed footprint"). 30/40 is the (mtx)-proven pair for a macro-less
+# std-cell block; drop to 25 if GRT shows structural overflow.
+# Phase 5 area rung (tag a41): computed from f75's measured final stdcell area
+# 9001.13 um^2 -> core 18000 um^2 (vs 24320 now, -26% die) at ~50% effective
+# util; FP_CORE_UTIL is evaluated against the *synth* area (7392/0.41 = 18030).
+# Watch GRT/DRT congestion; fall back to 34/45 if it congests.
+FP_CORE_UTIL: 41
+FP_ASPECT_RATIO: 1
+
+# ---- PHASE-2 FOOTPRINT FREEZE (sq1 -> sq2, guide 01_FLOORPLAN_GUIDE.md §4) ----
+# Square, row-aligned tile footprint for systolic array assembly.
+#   margins L/R = 12 sites = 5.52 um (default), T/B halved 4 -> 2 rows (10.88 ->
+#   5.44) so gutters are ~equal on both axes => square CORE inside square DIE.
+#   sq1 @ 144.16 (53 rows): die 20782 um^2 (-8.3% vs a41), core 132.94 x 133.28
+#   (aspect 1.003) BUT max_ss missed the 7.35 claim by 6.7 ps (req 7.3567).
+#   sq2 @ 146.88 (54 rows): core 135.7 x 136.0 (aspect 1.002), core 18455
+#   um^2, die 21574 (-4.9% vs a41) BUT max_ss 7.3901 (worse: bigger core =
+#   longer wires) -> sq2 rejected.
+#   sq1p55 (THIS config): sq1 geometry (144.16, density 52) + PnR repair
+#   tightened 6.0 -> 5.5 ns to recover sq1's 6.7 ps SS miss; claim stays 7.35.
+#   FP_CORE_UTIL above stays only as the relative fallback (guide 4 step 4).
+FP_SIZING: absolute
+PL_TARGET_DENSITY_PCT: 52
+DIE_AREA: [0, 0, 144.16, 144.16]
+TOP_MARGIN_MULT: 2
+BOTTOM_MARGIN_MULT: 2
+
+# -- Routing: (ref) -- same flake, same OpenROAD build; these five are the
+#    crash/congestion workarounds earned by runs_archive_v1 + GRT-0183 --
+GRT_OVERFLOW_ITERS: 15
+# single-digit overflow clears in detail route; structural overflow does not
+# and this flag hides nothing real (ref doc5).
+GRT_ALLOW_CONGESTION: true
+# diode insertion maze-routes and crashed (heap underflow GRT-0183 on a clk
+# leaf); jumpers fix antennas without it.
+GRT_ANTENNA_REPAIR_JUMPER_ONLY: true
+GRT_ANTENNA_REPAIR_ITERS: 3
+DRT_OPT_ITERS: 16
+
+# -- CTS: sq1cts2 rung -- characterization over TT *and* the binding SS corner
+#    (binding corner is max_ss per every run in 03_RESULTS 4.1); sq1cts's attempt
+#    was a no-op (duplicate YAML key, last-wins) -- see comment at CLOCK_PERIOD.
+CTS_CORNERS:
+  - nom_tt_025C_1v80
+  - max_ss_100C_1v60
+
+# Synthesis strategy: measured winner of the phase-1b strategy study
+# (docs/03_RESULTS.md §2-3): DELAY 1 + ABC buffering = 2971 ps ABC delay vs
+# 4467 ps for the default DELAY 0, at only +6 % area. Period-first brief ->
+# fastest mapping wins. AREA 0 (476 cells / 5124.9 um2 / 5873 ps) is kept in
+# the table as the area-optimal alternative for a later area pass.
+# NOTE 1: CLOCK_PERIOD does NOT change ABC's mapping in this build (measured:
+# 10 ns and 2 ns netlists are byte-identical) -- strategy does. Do not sweep
+# CLOCK_PERIOD at synth; it measures the same mapping repeatedly.
+# NOTE 2: SYNTH_ABC_USE_MFS3 was tried and REJECTED: on DELAY 0 it crashes ABC
+# (utilTruth.h assertion, exit 134 -- runs/m0), on DELAY 1 it is slower AND
+# bigger than plain buffering (runs/m1 vs runs/c1).
+SYNTH_STRATEGY: DELAY 1
+# abc's `buffer -N <fanout 10> -S <tran 0.75 ns>; upsize; dnsize` after
+# mapping -- the toggle that bought the most delay per unit area (-24 % on
+# DELAY 0, and it stacks with DELAY 1).
+SYNTH_ABC_BUFFERING: true
+
+# Checks: warn on advisories during bring-up, but never ignore linter
+# ERRORS -- (ref)/(mtx) stance.
+ERROR_ON_SYNTH_CHECKS: false
+ERROR_ON_LINTER_WARNINGS: false
+ERROR_ON_LINTER_ERRORS: true
+
+# -- Threads: (ref) -- 8 cores; STA capped at 4 because 9 parallel SPEF-STA
+#    runs OOM'd this 7 GB machine --
+DRT_THREADS: 8
+STA_THREADS: 4
+KLAYOUT_DRC_THREADS: 8
+KLAYOUT_XOR_THREADS: 8
+
+meta:
+  flow: Classic

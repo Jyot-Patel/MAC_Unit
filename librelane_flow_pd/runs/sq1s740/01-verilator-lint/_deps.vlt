@@ -1,0 +1,5 @@
+`verilator_config
+lint_off -rule DECLFILENAME
+lint_off -rule EOFNEWLINE
+lint_off -rule UNDRIVEN -file "/home/jyot/workspace/librelane_project/designs/mac/librelane_flow_pd/runs/sq1s740/tmp/2b06c3620f2b48418416bf949b3d806b.bb.v"
+lint_off -rule UNUSEDSIGNAL -file "/home/jyot/workspace/librelane_project/designs/mac/librelane_flow_pd/runs/sq1s740/tmp/2b06c3620f2b48418416bf949b3d806b.bb.v"
